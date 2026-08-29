@@ -19,7 +19,7 @@ notify() {
 }
 
 transcript="${VOICEINK_TRANSCRIPT:-${1:-}}"
-[[ -n $transcript ]] || transcript="$(cat)"
+[[ -n $transcript || -t 0 ]] || transcript="$(cat)"
 
 # Speech arrives capitalised and punctuated; reduce it to bare lowercase words.
 phrase="${transcript:l}"
@@ -37,6 +37,20 @@ done
 verb="${phrase%% *}"
 argument="${phrase#$verb}"
 argument="${argument## }"
+
+# Speech leaves debris the verb handlers should never have to think about:
+# articles in front of the argument, and words the recogniser stuttered on
+# ("open a phone phone mirroring" is "open phone mirroring").
+while [[ $argument == (a|an|the|my|up|some)\ * ]]; do
+    argument="${argument#* }"
+done
+
+words=(${=argument})
+deduped=()
+for word in $words; do
+    [[ $word == ${deduped[-1]:-} ]] || deduped+=($word)
+done
+argument="${deduped[*]}"
 
 # An alias maps a spoken word onto a handler that already exists.
 if [[ ! -x $VERBS/$verb.sh && -f $VERBS/aliases ]]; then

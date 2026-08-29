@@ -40,20 +40,17 @@ candidates=(
     ~/Applications/*/*.app(N)
 )
 
-# Spotlight covers bundles outside the usual folders; only worth the latency
-# when the cheap globs came up empty.
-#
 # Among partial matches the shortest name wins: "chrome" should reach Google
 # Chrome rather than Chrome Remote Desktop, which merely starts with the word.
 match_in() {
-    local best= best_len=0 path name
-    for path in "$@"; do
-        name="$(squash "${${path:t}%.app}")"
+    local best= best_len=0 bundle name
+    for bundle in "$@"; do
+        name="$(squash "${${bundle:t}%.app}")"
         if [[ $name == $target ]]; then
-            print -r -- "$path"
+            print -r -- "$bundle"
             return 0
         elif [[ $name == *$target* ]] && { [[ -z $best ]] || (( ${#name} < best_len )) }; then
-            best="$path"
+            best="$bundle"
             best_len=${#name}
         fi
     done
@@ -61,9 +58,29 @@ match_in() {
     print -r -- "$best"
 }
 
-app="$(match_in $candidates)" || app="$(match_in ${(f)"$(mdfind "kMDItemContentType == 'com.apple.application-bundle'" 2>/dev/null)"})" || {
-    notify "No app matching \"$query\"."
-    exit 1
+# Spotlight covers bundles outside the usual folders, and fuzzy matching covers
+# names the recogniser mangled. Both cost more than the globs, so they only run
+# once the cheap comparison has come up empty.
+installed() {
+    print -rl -- $candidates
+    mdfind "kMDItemContentType == 'com.apple.application-bundle'" 2>/dev/null
 }
+
+# Never name a local "path" in zsh: it is the array view of $PATH, so a local
+# one blanks the search path and every external command vanishes.
+fuzzy_match() {
+    local bundle
+    for bundle in ${(f)"$(installed)"}; do
+        printf '%s\t%s\n' "${${bundle:t}%.app}" "$bundle"
+    done | "$HERE/../fuzzy-match.sh" "$query"
+}
+
+app="$(match_in $candidates)" \
+    || app="$(match_in ${(f)"$(mdfind "kMDItemContentType == 'com.apple.application-bundle'" 2>/dev/null)"})" \
+    || app="$(fuzzy_match)" \
+    || {
+        notify "No app matching \"$query\"."
+        exit 1
+    }
 
 open -a "$app"

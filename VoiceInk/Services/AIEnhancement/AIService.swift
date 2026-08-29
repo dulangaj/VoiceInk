@@ -90,7 +90,7 @@ enum AIProvider: String, CaseIterable {
         case .custom:
             return CustomAIProviderManager.shared.defaultModelName
         case .openRouter:
-            return "openai/gpt-oss-120b"
+            return "mistralai/ministral-8b-2512"
         }
     }
 
@@ -705,10 +705,11 @@ class AIService: ObservableObject {
     func fetchOpenRouterModels() async {
         // A failed fetch leaves the cached list alone: clearing it would invalidate the
         // saved model selection and fall back to the provider default.
-        guard let models = try? await OpenRouterClient.fetchModels(), !models.isEmpty else { return }
+        guard let catalog = try? await OpenRouterModelCatalog.fetch(), !catalog.modelIDs.isEmpty else { return }
+        OpenRouterModelCatalog.saveMandatoryReasoningIDs(catalog.mandatoryReasoningIDs)
 
         await MainActor.run {
-            self.openRouterModels = models
+            self.openRouterModels = catalog.modelIDs
             self.saveOpenRouterModels()
             self.objectWillChange.send()
         }

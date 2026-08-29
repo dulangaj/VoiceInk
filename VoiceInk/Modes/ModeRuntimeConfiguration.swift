@@ -54,6 +54,7 @@ struct OutputRuntimeConfiguration {
     let mode: ModeConfig?
     let outputMode: ModeOutputMode
     let autoSendKey: AutoSendKey
+    let sendAsSeparateMessages: Bool
     let customCommand: ModeCustomCommand?
 }
 
@@ -184,6 +185,7 @@ enum ModeRuntimeResolver {
             mode: mode,
             outputMode: mode?.outputMode ?? .paste,
             autoSendKey: mode?.autoSendKey ?? .none,
+            sendAsSeparateMessages: mode?.sendAsSeparateMessages ?? false,
             customCommand: mode?.customCommand
         )
     }

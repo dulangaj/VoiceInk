@@ -84,6 +84,7 @@ struct ModeConfig: Codable, Identifiable, Equatable {
     var selectedAIModel: String?
     var outputMode: ModeOutputMode = .paste
     var autoSendKey: AutoSendKey = .none
+    var sendAsSeparateMessages: Bool = false
     var customCommand: ModeCustomCommand?
     var isEnabled: Bool = true
     var isDefault: Bool = false
@@ -92,7 +93,7 @@ struct ModeConfig: Codable, Identifiable, Equatable {
         case id, name, icon, appConfigs, urlConfigs, triggerGroups, triggerWords, isAIEnhancementEnabled,
             selectedPrompt, isRealtimeTranscriptionEnabled, selectedLanguage, isTextFormattingEnabled,
             useClipboardContext, useSelectedTextContext, useScreenCapture, selectedAIProvider, selectedAIModel,
-            outputMode, isAutoSendEnabled, autoSendKey, customCommand, isEnabled, isDefault
+            outputMode, isAutoSendEnabled, autoSendKey, sendAsSeparateMessages, customCommand, isEnabled, isDefault
         case legacyEmoji = "emoji"
         case selectedWhisperModel
         case selectedTranscriptionModelName
@@ -106,7 +107,8 @@ struct ModeConfig: Codable, Identifiable, Equatable {
         selectedLanguage: String? = nil, useClipboardContext: Bool = false, useSelectedTextContext: Bool = true,
         useScreenCapture: Bool = false,
         isTextFormattingEnabled: Bool = false, selectedAIProvider: String? = nil, selectedAIModel: String? = nil,
-        outputMode: ModeOutputMode = .paste, autoSendKey: AutoSendKey = .none, customCommand: ModeCustomCommand? = nil,
+        outputMode: ModeOutputMode = .paste, autoSendKey: AutoSendKey = .none, sendAsSeparateMessages: Bool = false,
+        customCommand: ModeCustomCommand? = nil,
         isEnabled: Bool = true, isDefault: Bool = false
     ) {
         self.id = id
@@ -122,6 +124,7 @@ struct ModeConfig: Codable, Identifiable, Equatable {
         self.useSelectedTextContext = useSelectedTextContext
         self.useScreenCapture = useScreenCapture
         self.autoSendKey = autoSendKey
+        self.sendAsSeparateMessages = sendAsSeparateMessages
         self.outputMode = outputMode
         self.customCommand = customCommand
         self.selectedAIProvider = selectedAIProvider
@@ -196,6 +199,7 @@ struct ModeConfig: Codable, Identifiable, Equatable {
         } else {
             autoSendKey = .none
         }
+        sendAsSeparateMessages = try container.decodeIfPresent(Bool.self, forKey: .sendAsSeparateMessages) ?? false
         isEnabled = try container.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
         isDefault = try container.decodeIfPresent(Bool.self, forKey: .isDefault) ?? false
 
@@ -229,6 +233,7 @@ struct ModeConfig: Codable, Identifiable, Equatable {
         try container.encodeIfPresent(selectedAIModel, forKey: .selectedAIModel)
         try container.encode(outputMode, forKey: .outputMode)
         try container.encode(autoSendKey, forKey: .autoSendKey)
+        try container.encode(sendAsSeparateMessages, forKey: .sendAsSeparateMessages)
         try container.encodeIfPresent(customCommand, forKey: .customCommand)
         try container.encodeIfPresent(selectedTranscriptionModelName, forKey: .selectedTranscriptionModelName)
         try container.encode(isEnabled, forKey: .isEnabled)

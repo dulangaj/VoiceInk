@@ -607,6 +607,20 @@ struct ModeConfigFormView: View {
                         )
                     }
                 }
+                .onChange(of: draft.autoSendKey) { _, _ in
+                    applyOutputRules()
+                }
+            }
+
+            if draft.outputMode.usesPasteOptions && draft.autoSendKey.isEnabled {
+                Toggle(isOn: $draft.sendAsSeparateMessages) {
+                    HStack(spacing: 6) {
+                        Text("Send as separate messages")
+                        InfoTip(
+                            "Splits the transcript on line breaks and sends each part as its own message. Pair with a prompt that writes one message per line."
+                        )
+                    }
+                }
             }
 
             if draft.outputMode == .customCommand {

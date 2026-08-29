@@ -75,7 +75,12 @@ struct ReasoningConfig {
 
     // Provider-specific body params for hiding reasoning.
     static func getExtraBodyParameters(for provider: AIProvider, modelName: String) -> [String: Any]? {
-        if provider == .cerebras && modelName == "gpt-oss-120b" {
+        if provider == .openRouter {
+            // Models that mandate reasoning reject "none", so they get the smallest budget
+            // instead. "low" rather than "minimal": only a handful of them accept "minimal".
+            let effort = OpenRouterModelCatalog.requiresReasoning(modelName) ? "low" : "none"
+            return ["reasoning": ["effort": effort, "exclude": true]]
+        } else if provider == .cerebras && modelName == "gpt-oss-120b" {
             return ["reasoning_format": "hidden"]
         } else if provider == .groq && (modelName == "openai/gpt-oss-120b" || modelName == "openai/gpt-oss-20b") {
             return ["include_reasoning": false]

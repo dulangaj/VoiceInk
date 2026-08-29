@@ -90,7 +90,7 @@ enum AIProvider: String, CaseIterable {
         case .custom:
             return CustomAIProviderManager.shared.defaultModelName
         case .openRouter:
-            return "openai/gpt-oss-120b"
+            return "mistralai/ministral-8b-2512"
         }
     }
 
@@ -268,9 +268,12 @@ class AIService: ObservableObject {
             return selectedProvider.defaultModel
         }
 
+        // An empty list means the provider's models could not be listed, not that the
+        // saved model is invalid; falling back to the default here silently retargets
+        // requests at a model the user never chose.
         if let selectedModel = selectedModels[selectedProvider],
             !selectedModel.isEmpty,
-            (selectedProvider == .ollama && !selectedModel.isEmpty) || availableModels.contains(selectedModel)
+            availableModels.isEmpty || availableModels.contains(selectedModel)
         {
             return selectedModel
         }
@@ -700,24 +703,15 @@ class AIService: ObservableObject {
     }
 
     func fetchOpenRouterModels() async {
-        do {
-            let models = try await OpenRouterClient.fetchModels()
-            await MainActor.run {
-                self.openRouterModels = models
-                self.saveOpenRouterModels()
-                if self.selectedProvider == .openRouter && self.currentModel == self.selectedProvider.defaultModel
-                    && !models.isEmpty
-                {
-                    self.selectModel(models.first!)
-                }
-                self.objectWillChange.send()
-            }
-        } catch {
-            await MainActor.run {
-                self.openRouterModels = []
-                self.saveOpenRouterModels()
-                self.objectWillChange.send()
-            }
+        // A failed fetch leaves the cached list alone: clearing it would invalidate the
+        // saved model selection and fall back to the provider default.
+        guard let catalog = try? await OpenRouterModelCatalog.fetch(), !catalog.modelIDs.isEmpty else { return }
+        OpenRouterModelCatalog.saveMandatoryReasoningIDs(catalog.mandatoryReasoningIDs)
+
+        await MainActor.run {
+            self.openRouterModels = catalog.modelIDs
+            self.saveOpenRouterModels()
+            self.objectWillChange.send()
         }
     }
 }

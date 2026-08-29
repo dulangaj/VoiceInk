@@ -441,11 +441,7 @@ struct ModeConfigFormView: View {
                     }
                 )
 
-                Picker("AI Model", selection: modelBinding) {
-                    ForEach(models, id: \.self) { model in
-                        Text(model).tag(model)
-                    }
-                }
+                SearchableModelPicker(title: "AI Model", models: models, selection: modelBinding)
 
                 if provider == .openRouter {
                     Button("Refresh Models") {
@@ -604,6 +600,20 @@ struct ModeConfigFormView: View {
                         Text("Auto Send")
                         InfoTip(
                             "Automatically presses a key combination after pasting text. Useful for chat applications or forms that use different send shortcuts."
+                        )
+                    }
+                }
+                .onChange(of: draft.autoSendKey) { _, _ in
+                    applyOutputRules()
+                }
+            }
+
+            if draft.outputMode.usesPasteOptions && draft.autoSendKey.isEnabled {
+                Toggle(isOn: $draft.sendAsSeparateMessages) {
+                    HStack(spacing: 6) {
+                        Text("Send as separate messages")
+                        InfoTip(
+                            "Splits the transcript on line breaks and sends each part as its own message. Pair with a prompt that writes one message per line."
                         )
                     }
                 }

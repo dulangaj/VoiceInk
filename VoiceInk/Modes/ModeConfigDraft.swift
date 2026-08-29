@@ -21,6 +21,7 @@ struct ModeConfigDraft {
     var selectedAIModel: String?
     var outputMode: ModeOutputMode
     var autoSendKey: AutoSendKey
+    var sendAsSeparateMessages: Bool
     var customCommand: String
     var isDefault: Bool
     var isTranscriptionFormattingExpanded: Bool
@@ -52,6 +53,7 @@ struct ModeConfigDraft {
             selectedAIModel = inheritedConfig?.selectedAIModel
             outputMode = .paste
             autoSendKey = .none
+            sendAsSeparateMessages = false
             customCommand = inheritedConfig?.customCommand?.command ?? ""
             isDefault = false
             isTranscriptionFormattingExpanded = false
@@ -79,6 +81,7 @@ struct ModeConfigDraft {
             selectedAIModel = latestConfig.selectedAIModel
             outputMode = latestConfig.outputMode
             autoSendKey = latestConfig.autoSendKey
+            sendAsSeparateMessages = latestConfig.sendAsSeparateMessages
             customCommand = latestConfig.customCommand?.command ?? ""
             isDefault = latestConfig.isDefault
             isTranscriptionFormattingExpanded = false
@@ -155,6 +158,11 @@ struct ModeConfigDraft {
 
         if !outputMode.usesPasteOptions {
             autoSendKey = .none
+            sendAsSeparateMessages = false
+        }
+
+        if !autoSendKey.isEnabled {
+            sendAsSeparateMessages = false
         }
 
         if outputMode == .respond {
@@ -164,6 +172,7 @@ struct ModeConfigDraft {
 
     func makeConfig(mode: ConfigurationMode) -> ModeConfig {
         let savedAutoSendKey: AutoSendKey = outputMode.usesPasteOptions ? autoSendKey : .none
+        let savedSendAsSeparateMessages = savedAutoSendKey.isEnabled && sendAsSeparateMessages
         let savedIsDefault = outputMode == .respond ? false : isDefault
         let savedCustomCommand = makeCustomCommand()
 
@@ -190,6 +199,7 @@ struct ModeConfigDraft {
                 selectedAIModel: selectedAIModel,
                 outputMode: outputMode,
                 autoSendKey: savedAutoSendKey,
+                sendAsSeparateMessages: savedSendAsSeparateMessages,
                 customCommand: savedCustomCommand,
                 isDefault: savedIsDefault
             )
@@ -215,6 +225,7 @@ struct ModeConfigDraft {
             updatedConfig.selectedAIModel = selectedAIModel
             updatedConfig.outputMode = outputMode
             updatedConfig.autoSendKey = savedAutoSendKey
+            updatedConfig.sendAsSeparateMessages = savedSendAsSeparateMessages
             updatedConfig.customCommand = savedCustomCommand
             updatedConfig.isDefault = savedIsDefault
             return updatedConfig

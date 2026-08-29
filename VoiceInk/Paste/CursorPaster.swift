@@ -20,6 +20,15 @@ class CursorPaster {
     private static let prePasteDelay: TimeInterval = 0.10
     private static let pasteShortcutEventDelay: TimeInterval = 0.01
     private static let minimumClipboardRestoreDelay: TimeInterval = 0.25
+    private static let pasteConfirmationTimeout: TimeInterval = 1.0
+    private static let composerClearTimeout: TimeInterval = 1.0
+    private static let unconfirmedSendDelay: TimeInterval = 0.50
+    private static let interMessageDelay: TimeInterval = 0.30
+
+    private struct PasteSessionOutcome {
+        let result: PasteResult
+        let sessionID: String
+    }
 
     static func pasteAtCursor(_ text: String) {
         Task {
@@ -34,7 +43,7 @@ class CursorPaster {
     @discardableResult
     static func startPasteAtCursor(_ text: String) -> Task<PasteResult, Never> {
         Task { @MainActor in
-            await performPasteSession(text)
+            await performPasteSession(text).result
         }
     }
 
@@ -43,11 +52,18 @@ class CursorPaster {
         await startPasteAtCursor(text).value
     }
 
+    /// Pass `restoresClipboard: false` when the caller pastes repeatedly and owns the
+    /// snapshot and restore for the whole batch; restoring after every paste would
+    /// discard the user's original clipboard.
     @MainActor
-    private static func performPasteSession(_ text: String) async -> PasteResult {
+    private static func performPasteSession(
+        _ text: String,
+        restoresClipboard: Bool = true
+    ) async -> PasteSessionOutcome {
         let pasteboard = NSPasteboard.general
         let shouldRestoreClipboard = UserDefaults.standard.bool(forKey: "restoreClipboardAfterPaste")
-        let savedContents = shouldRestoreClipboard ? snapshotClipboard(from: pasteboard) : []
+        let savedContents =
+            restoresClipboard && shouldRestoreClipboard ? snapshotClipboard(from: pasteboard) : []
         let sessionID = UUID().uuidString
 
         guard
@@ -58,13 +74,13 @@ class CursorPaster {
             )
         else {
             logger.error("Failed to prepare clipboard for paste")
-            return .commandNotPosted
+            return PasteSessionOutcome(result: .commandNotPosted, sessionID: sessionID)
         }
 
         await wait(prePasteDelay)
 
         let pasteResult = await postPasteCommand()
-        if shouldRestoreClipboard {
+        if restoresClipboard && shouldRestoreClipboard {
             scheduleClipboardRestore(
                 savedContents,
                 expectedText: text,
@@ -73,7 +89,7 @@ class CursorPaster {
             )
         }
 
-        return pasteResult
+        return PasteSessionOutcome(result: pasteResult, sessionID: sessionID)
     }
 
     private static func snapshotClipboard(from pasteboard: NSPasteboard) -> ClipboardSnapshot {
@@ -220,6 +236,64 @@ class CursorPaster {
     }
 
     // MARK: - Auto Send Keys
+
+    /// Pastes each message and posts the send key after every one, waiting for the
+    /// focused field to reflect the paste before sending so the send key cannot
+    /// outrun the text.
+    @MainActor
+    static func pasteAndSend(_ messages: [String], autoSendKey: AutoSendKey) async {
+        guard let firstMessage = messages.first else { return }
+
+        guard messages.count > 1 else {
+            let outcome = await performPasteSession(firstMessage)
+            await send(autoSendKey, after: firstMessage, pasteResult: outcome.result)
+            return
+        }
+
+        let pasteboard = NSPasteboard.general
+        let shouldRestoreClipboard = UserDefaults.standard.bool(forKey: "restoreClipboardAfterPaste")
+        let savedContents = shouldRestoreClipboard ? snapshotClipboard(from: pasteboard) : []
+        var lastSession: (text: String, id: String)?
+
+        for (index, message) in messages.enumerated() {
+            if index > 0, !(await FocusedFieldReader.waitForEmptyField(timeout: composerClearTimeout)) {
+                await wait(interMessageDelay)
+            }
+
+            let outcome = await performPasteSession(message, restoresClipboard: false)
+            lastSession = (message, outcome.sessionID)
+
+            guard outcome.result.didPostPasteCommand else {
+                logger.error("Stopping multi-message send after a failed paste")
+                break
+            }
+
+            await send(autoSendKey, after: message, pasteResult: outcome.result)
+        }
+
+        if shouldRestoreClipboard, let lastSession {
+            scheduleClipboardRestore(
+                savedContents,
+                expectedText: lastSession.text,
+                sessionID: lastSession.id,
+                on: pasteboard
+            )
+        }
+    }
+
+    /// Waits for the pasted text to appear in the focused field before posting the send
+    /// key, so the send cannot outrun the paste. Falls back to a fixed delay when the
+    /// field's text cannot be read.
+    @MainActor
+    private static func send(_ autoSendKey: AutoSendKey, after message: String, pasteResult: PasteResult) async {
+        guard autoSendKey.isEnabled, pasteResult.didPostPasteCommand else { return }
+
+        if !(await FocusedFieldReader.waitForText(message, timeout: pasteConfirmationTimeout)) {
+            await wait(unconfirmedSendDelay)
+        }
+
+        performAutoSend(autoSendKey)
+    }
 
     static func performAutoSend(_ key: AutoSendKey) {
         guard key.isEnabled else { return }

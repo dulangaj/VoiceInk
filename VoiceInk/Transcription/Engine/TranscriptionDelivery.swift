@@ -156,21 +156,22 @@ final class TranscriptionDelivery {
 
     private func paste(_ text: String, output: OutputRuntimeConfiguration, actions: Actions) async {
         let textToPaste = deliverableText(from: text)
-        let appendSpace = UserDefaults.standard.bool(forKey: "AppendTrailingSpace")
-        let pastedText = textToPaste + (appendSpace ? " " : "")
         SoundManager.shared.playStopSound()
         await actions.dismiss()
 
-        let pasteTask = CursorPaster.startPasteAtCursor(pastedText)
-
         let autoSendKey = output.outputMode == .paste ? output.autoSendKey : .none
-        Task { @MainActor in
-            _ = await pasteTask.value
+        // Splitting sends each message on its own, so a trailing space would only
+        // pad the last one; it stays a single-paste concern.
+        let messages: [String]
+        if output.sendAsSeparateMessages && autoSendKey.isEnabled {
+            messages = MessageSplitter.split(textToPaste)
+        } else {
+            let appendSpace = UserDefaults.standard.bool(forKey: "AppendTrailingSpace")
+            messages = [textToPaste + (appendSpace ? " " : "")]
+        }
 
-            if autoSendKey.isEnabled {
-                try? await Task.sleep(nanoseconds: 500_000_000)
-                CursorPaster.performAutoSend(autoSendKey)
-            }
+        Task { @MainActor in
+            await CursorPaster.pasteAndSend(messages, autoSendKey: autoSendKey)
         }
     }
 

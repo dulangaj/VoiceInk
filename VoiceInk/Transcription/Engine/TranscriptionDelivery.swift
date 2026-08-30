@@ -161,13 +161,14 @@ final class TranscriptionDelivery {
 
         let autoSendKey = output.outputMode == .paste ? output.autoSendKey : .none
         // Splitting sends each message on its own, so a trailing space would only
-        // pad the last one; it stays a single-paste concern.
+        // pad the last one; it stays a single-paste concern. Each message is judged
+        // for its trailing period separately, since each lands as its own remark.
         let messages: [String]
         if output.sendAsSeparateMessages && autoSendKey.isEnabled {
-            messages = MessageSplitter.split(textToPaste)
+            messages = MessageSplitter.split(textToPaste).map(TrailingPeriodTrimmer.trim)
         } else {
             let appendSpace = UserDefaults.standard.bool(forKey: "AppendTrailingSpace")
-            messages = [textToPaste + (appendSpace ? " " : "")]
+            messages = [TrailingPeriodTrimmer.trim(textToPaste) + (appendSpace ? " " : "")]
         }
 
         Task { @MainActor in
